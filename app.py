@@ -1,0 +1,567 @@
+"""
+app.py - Main Application File
+==============================
+This is the entry point of our Flask application.
+It contains all route definitions (URL endpoints) and application logic.
+"""
+
+from flask import Flask, render_template, redirect, url_for, flash, request
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from datetime import datetime, timedelta
+
+# Import our modules
+from config import Config
+from models import db, User, Trip, Expense, CURRENCIES, EXPENSE_CATEGORIES, PAYMENT_METHODS
+from forms import RegistrationForm, LoginForm, TripForm, ExpenseForm
+
+
+# =============================================================================
+# APPLICATION INITIALIZATION
+# =============================================================================
+
+def create_app():
+    """
+    Application Factory Pattern
+    
+    This pattern allows us to create multiple instances of the app,
+    which is useful for testing. It also ensures proper initialization order.
+    
+    Returns:
+        Flask: Configured Flask application instance
+    """
+    
+    # Create Flask application instance
+    app = Flask(__name__)
+    
+    # Load configuration from Config class
+    app.config.from_object(Config)
+    
+    # Initialize database with app
+    db.init_app(app)
+    
+    # Initialize Flask-Login for user session management
+    login_manager = LoginManager()
+    login_manager.init_app(app)
+    login_manager.login_view = 'login'  # Redirect to 'login' when @login_required fails
+    login_manager.login_message = 'Please log in to access this page.'
+    login_manager.login_message_category = 'info'
+    
+    @login_manager.user_loader
+    def load_user(user_id):
+        """
+        Flask-Login callback to load user from session.
+        This is called on every request to get the current user.
+        
+        Args:
+            user_id: User ID stored in session
+            
+        Returns:
+            User object or None
+        """
+        return User.query.get(int(user_id))
+    
+    # Create database tables
+    with app.app_context():
+        db.create_all()
+    
+    return app
+
+
+# Create the application
+app = create_app()
+
+
+# =============================================================================
+# TEMPLATE CONTEXT PROCESSORS
+# =============================================================================
+
+@app.context_processor
+def utility_processor():
+    """
+    Make utility functions and variables available in all templates.
+    
+    Returns:
+        dict: Variables to inject into template context
+    """
+    return {
+        'currencies': CURRENCIES,
+        'categories': EXPENSE_CATEGORIES,
+        'payment_methods': PAYMENT_METHODS,
+        'now': datetime.utcnow()
+    }
+
+
+# =============================================================================
+# AUTHENTICATION ROUTES
+# =============================================================================
+
+@app.route('/')
+def index():
+    """
+    Home page route.
+    Redirects to dashboard if logged in, otherwise shows login page.
+    """
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login'))
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """
+    User Registration Route
+    
+    GET: Display registration form
+    POST: Process registration, create new user
+    """
+    # Redirect if already logged in
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    form = RegistrationForm()
+    
+    # Check if form was submitted and is valid
+    if form.validate_on_submit():
+        # Create new user object
+        user = User(
+            username=form.username.data,
+            email=form.email.data
+        )
+        # Hash and set password
+        user.set_password(form.password.data)
+        
+        # Add to database
+        db.session.add(user)
+        db.session.commit()
+        
+        # Flash success message
+        flash('Registration successful! Please log in.', 'success')
+        return redirect(url_for('login'))
+    
+    return render_template('register.html', form=form)
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """
+    User Login Route
+    
+    GET: Display login form
+    POST: Authenticate user, create session
+    """
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    form = LoginForm()
+    
+    if form.validate_on_submit():
+        # Find user by username
+        user = User.query.filter_by(username=form.username.data).first()
+        
+        # Verify user exists and password is correct
+        if user and user.check_password(form.password.data):
+            # Log in the user (creates session)
+            login_user(user)
+            flash(f'Welcome back, {user.username}!', 'success')
+            
+            # Redirect to originally requested page or dashboard
+            next_page = request.args.get('next')
+            return redirect(next_page if next_page else url_for('dashboard'))
+        else:
+            flash('Invalid username or password', 'danger')
+    
+    return render_template('login.html', form=form)
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    """
+    User Logout Route
+    
+    Clears user session and redirects to login page.
+    """
+    logout_user()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('login'))
+
+
+# =============================================================================
+# DASHBOARD AND TRIP ROUTES
+# =============================================================================
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    """
+    Main Dashboard Route
+    
+    Shows overview of all user's trips with summary statistics.
+    """
+    # Get all trips for current user, sorted by start date (newest first)
+    trips = Trip.query.filter_by(user_id=current_user.id)\
+                      .order_by(Trip.start_date.desc()).all()
+    
+    # Calculate summary statistics
+    total_trips = len(trips)
+    total_spent = sum(trip.total_expenses for trip in trips)
+    total_budget = sum(trip.budget for trip in trips if trip.budget)
+    
+    return render_template('dashboard.html', 
+                         trips=trips,
+                         total_trips=total_trips,
+                         total_spent=total_spent,
+                         total_budget=total_budget)
+
+
+@app.route('/trip/new', methods=['GET', 'POST'])
+@login_required
+def add_trip():
+    """
+    Create New Trip Route
+    
+    GET: Display trip creation form
+    POST: Create new trip in database
+    """
+    form = TripForm()
+    
+    if form.validate_on_submit():
+        trip = Trip(
+            name=form.name.data,
+            destination=form.destination.data,
+            start_date=form.start_date.data,
+            end_date=form.end_date.data,
+            base_currency=form.base_currency.data,
+            budget=form.budget.data or 0,
+            description=form.description.data,
+            user_id=current_user.id
+        )
+        
+        db.session.add(trip)
+        db.session.commit()
+        
+        flash(f'Trip "{trip.name}" created successfully!', 'success')
+        return redirect(url_for('trip_details', trip_id=trip.id))
+    
+    return render_template('add_trip.html', form=form)
+
+
+@app.route('/trip/<int:trip_id>')
+@login_required
+def trip_details(trip_id):
+    """
+    Trip Details Route
+    
+    Shows detailed view of a specific trip with all expenses.
+    
+    Args:
+        trip_id: ID of the trip to display
+    """
+    # Get trip or return 404 if not found
+    trip = Trip.query.get_or_404(trip_id)
+    
+    # Security check: ensure trip belongs to current user
+    if trip.user_id != current_user.id:
+        flash('Access denied.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    # Get expenses sorted by date
+    expenses = Expense.query.filter_by(trip_id=trip_id)\
+                           .order_by(Expense.date).all()
+    
+    # Calculate expenses by category for chart
+    expenses_by_category = {}
+    for expense in expenses:
+        if expense.category in expenses_by_category:
+            expenses_by_category[expense.category] += expense.amount_in_base_currency
+        else:
+            expenses_by_category[expense.category] = expense.amount_in_base_currency
+    
+    # Calculate daily expenses
+    expenses_by_day = {}
+    for expense in expenses:
+        day_key = expense.date.strftime('%Y-%m-%d')
+        if day_key in expenses_by_day:
+            expenses_by_day[day_key] += expense.amount_in_base_currency
+        else:
+            expenses_by_day[day_key] = expense.amount_in_base_currency
+    
+    return render_template('trip_details.html',
+                         trip=trip,
+                         expenses=expenses,
+                         expenses_by_category=expenses_by_category,
+                         expenses_by_day=expenses_by_day,
+                         currency_symbol=CURRENCIES[trip.base_currency]['symbol'])
+
+
+@app.route('/trip/<int:trip_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_trip(trip_id):
+    """
+    Edit Trip Route
+    
+    Allows editing existing trip details.
+    """
+    trip = Trip.query.get_or_404(trip_id)
+    
+    if trip.user_id != current_user.id:
+        flash('Access denied.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    form = TripForm(obj=trip)  # Pre-populate form with existing data
+    
+    if form.validate_on_submit():
+        trip.name = form.name.data
+        trip.destination = form.destination.data
+        trip.start_date = form.start_date.data
+        trip.end_date = form.end_date.data
+        trip.base_currency = form.base_currency.data
+        trip.budget = form.budget.data or 0
+        trip.description = form.description.data
+        
+        db.session.commit()
+        flash('Trip updated successfully!', 'success')
+        return redirect(url_for('trip_details', trip_id=trip.id))
+    
+    return render_template('add_trip.html', form=form, trip=trip, edit_mode=True)
+
+
+@app.route('/trip/<int:trip_id>/delete', methods=['POST'])
+@login_required
+def delete_trip(trip_id):
+    """
+    Delete Trip Route
+    
+    Removes trip and all associated expenses.
+    """
+    trip = Trip.query.get_or_404(trip_id)
+    
+    if trip.user_id != current_user.id:
+        flash('Access denied.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    trip_name = trip.name
+    db.session.delete(trip)
+    db.session.commit()
+    
+    flash(f'Trip "{trip_name}" deleted successfully.', 'success')
+    return redirect(url_for('dashboard'))
+
+
+# =============================================================================
+# EXPENSE ROUTES
+# =============================================================================
+
+@app.route('/trip/<int:trip_id>/expense/new', methods=['GET', 'POST'])
+@login_required
+def add_expense(trip_id):
+    """
+    Add New Expense Route
+    
+    Creates a new expense entry for a specific trip.
+    """
+    trip = Trip.query.get_or_404(trip_id)
+    
+    if trip.user_id != current_user.id:
+        flash('Access denied.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    form = ExpenseForm()
+    
+    if form.validate_on_submit():
+        # Calculate exchange rate
+        expense_currency = form.currency.data
+        base_currency = trip.base_currency
+        
+        # Convert to base currency using our rates
+        if expense_currency == base_currency:
+            exchange_rate = 1.0
+        else:
+            # First convert expense to INR, then to base currency
+            expense_to_inr = CURRENCIES[expense_currency]['rate_to_inr']
+            base_to_inr = CURRENCIES[base_currency]['rate_to_inr']
+            exchange_rate = expense_to_inr / base_to_inr
+        
+        # Calculate day of trip
+        day_of_trip = (form.date.data - trip.start_date).days + 1
+        
+        expense = Expense(
+            description=form.description.data,
+            category=form.category.data,
+            amount=form.amount.data,
+            currency=expense_currency,
+            exchange_rate=exchange_rate,
+            date=form.date.data,
+            day_of_trip=day_of_trip,
+            location=form.location.data,
+            payment_method=form.payment_method.data,
+            notes=form.notes.data,
+            trip_id=trip_id
+        )
+        
+        db.session.add(expense)
+        db.session.commit()
+        
+        flash('Expense added successfully!', 'success')
+        return redirect(url_for('trip_details', trip_id=trip_id))
+    
+    # Set default date to today or trip start date
+    if not form.date.data:
+        today = datetime.today().date()
+        if trip.start_date <= today <= trip.end_date:
+            form.date.data = today
+        else:
+            form.date.data = trip.start_date
+    
+    return render_template('add_expense.html', form=form, trip=trip)
+
+
+@app.route('/expense/<int:expense_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_expense(expense_id):
+    """
+    Edit Expense Route
+    """
+    expense = Expense.query.get_or_404(expense_id)
+    trip = expense.trip
+    
+    if trip.user_id != current_user.id:
+        flash('Access denied.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    form = ExpenseForm(obj=expense)
+    
+    if form.validate_on_submit():
+        expense.description = form.description.data
+        expense.category = form.category.data
+        expense.amount = form.amount.data
+        expense.currency = form.currency.data
+        expense.date = form.date.data
+        expense.location = form.location.data
+        expense.payment_method = form.payment_method.data
+        expense.notes = form.notes.data
+        
+        # Recalculate exchange rate and day
+        if expense.currency == trip.base_currency:
+            expense.exchange_rate = 1.0
+        else:
+            expense_to_inr = CURRENCIES[expense.currency]['rate_to_inr']
+            base_to_inr = CURRENCIES[trip.base_currency]['rate_to_inr']
+            expense.exchange_rate = expense_to_inr / base_to_inr
+        
+        expense.day_of_trip = (form.date.data - trip.start_date).days + 1
+        
+        db.session.commit()
+        flash('Expense updated successfully!', 'success')
+        return redirect(url_for('trip_details', trip_id=trip.id))
+    
+    return render_template('add_expense.html', form=form, trip=trip, 
+                         expense=expense, edit_mode=True)
+
+
+@app.route('/expense/<int:expense_id>/delete', methods=['POST'])
+@login_required
+def delete_expense(expense_id):
+    """
+    Delete Expense Route
+    """
+    expense = Expense.query.get_or_404(expense_id)
+    trip = expense.trip
+    
+    if trip.user_id != current_user.id:
+        flash('Access denied.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    db.session.delete(expense)
+    db.session.commit()
+    
+    flash('Expense deleted successfully.', 'success')
+    return redirect(url_for('trip_details', trip_id=trip.id))
+
+
+# =============================================================================
+# REPORTS ROUTE
+# =============================================================================
+
+@app.route('/trip/<int:trip_id>/reports')
+@login_required
+def reports(trip_id):
+    """
+    Trip Reports Route
+    
+    Shows detailed analytics and reports for a trip.
+    """
+    trip = Trip.query.get_or_404(trip_id)
+    
+    if trip.user_id != current_user.id:
+        flash('Access denied.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    expenses = Expense.query.filter_by(trip_id=trip_id).all()
+    
+    # Calculate various statistics
+    total_expenses = sum(e.amount_in_base_currency for e in expenses)
+    
+    # By category
+    category_totals = {}
+    for expense in expenses:
+        cat = expense.category
+        category_totals[cat] = category_totals.get(cat, 0) + expense.amount_in_base_currency
+    
+    # By payment method
+    payment_totals = {}
+    for expense in expenses:
+        method = expense.payment_method
+        payment_totals[method] = payment_totals.get(method, 0) + expense.amount_in_base_currency
+    
+    # By day
+    daily_totals = {}
+    for expense in expenses:
+        day = expense.day_of_trip
+        daily_totals[day] = daily_totals.get(day, 0) + expense.amount_in_base_currency
+    
+    # Sort daily totals by day
+    daily_totals = dict(sorted(daily_totals.items()))
+    
+    # Average per day
+    avg_per_day = total_expenses / trip.duration_days if trip.duration_days > 0 else 0
+    
+    return render_template('reports.html',
+                         trip=trip,
+                         total_expenses=total_expenses,
+                         category_totals=category_totals,
+                         payment_totals=payment_totals,
+                         daily_totals=daily_totals,
+                         avg_per_day=avg_per_day,
+                         currency_symbol=CURRENCIES[trip.base_currency]['symbol'])
+
+
+# =============================================================================
+# ERROR HANDLERS
+# =============================================================================
+
+@app.errorhandler(404)
+def not_found_error(error):
+    """Handle 404 errors"""
+    return render_template('base.html', 
+                         error_code=404, 
+                         error_message='Page not found'), 404
+
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Handle 500 errors"""
+    db.session.rollback()
+    return render_template('base.html', 
+                         error_code=500, 
+                         error_message='Internal server error'), 500
+
+
+# =============================================================================
+# RUN APPLICATION
+# =============================================================================
+
+if __name__ == '__main__':
+    # Run in debug mode for development
+    # Set debug=False in production!
+    app.run(debug=True, port=5000)
