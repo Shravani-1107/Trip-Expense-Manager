@@ -1,0 +1,114 @@
+/* ================================
+   Professional Animation Enhancements
+================================ */
+
+/* Global Motion Variables */
+:root {
+    --transition-fast: 0.2s ease-out;
+    --transition-medium: 0.3s ease-out;
+    --transition-slow: 0.5s ease-out;
+
+    --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-hover: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+/* Card Enhancements (Refined) */
+.card {
+    border-radius: 10px;
+    transition: 
+        transform var(--transition-fast),
+        box-shadow var(--transition-fast);
+}
+
+.card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-hover);
+}
+
+/* Button Refinement */
+.btn {
+    transition: 
+        background-color var(--transition-fast),
+        transform var(--transition-fast),
+        box-shadow var(--transition-fast);
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-soft);
+}
+
+.btn:active {
+    transform: translateY(0);
+    box-shadow: none;
+}
+
+/* Progress Bar (Smoother + Premium) */
+.progress-bar {
+    transition: width 0.6s ease-out;
+}
+
+/* Form Focus (Subtle Glow) */
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.15rem rgba(13, 110, 253, 0.12);
+    transition: all var(--transition-fast);
+}
+
+/* Alert Animation (More Subtle) */
+.alert {
+    animation: fadeSlideIn 0.25s ease-out;
+}
+
+/* Refined Animation */
+@keyframes fadeSlideIn {
+    from {
+        transform: translateY(-8px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Navbar Interaction */
+.navbar-brand {
+    transition: opacity var(--transition-fast);
+}
+
+.navbar-brand:hover {
+    opacity: 0.85;
+}
+
+/* Badge Micro Interaction */
+.badge {
+    transition: background-color var(--transition-fast),
+                transform var(--transition-fast);
+}
+
+.badge:hover {
+    transform: translateY(-1px);
+}
+
+/* Table Row Hover (Professional feel) */
+.table tbody tr {
+    transition: background-color var(--transition-fast);
+}
+
+.table tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Smooth Page Feel */
+body {
+    scroll-behavior: smooth;
+}
+
+/* Reduce Motion for Accessibility */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation: none !important;
+        transition: none !important;
+    }
+}
