@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
 <title>Trip Expense Manager</title>
@@ -8,12 +8,12 @@
 
 <style>
 body { background:#f4f6f9; }
+.hidden { display:none; }
 .navbar { background:#212529; }
 .card { border-radius:12px; }
-.hidden { display:none; }
 </style>
-</head>
 
+</head>
 <body>
 
 <nav class="navbar navbar-dark px-3">
@@ -25,29 +25,39 @@ body { background:#f4f6f9; }
 <!-- LOGIN -->
 <div id="loginPage">
     <h3>Login</h3>
-    <input id="username" class="form-control mb-2" placeholder="Username">
-    <input id="password" type="password" class="form-control mb-2" placeholder="Password">
+    <input id="loginUser" class="form-control mb-2" placeholder="Username">
+    <input id="loginPass" type="password" class="form-control mb-2" placeholder="Password">
     <button class="btn btn-primary" onclick="login()">Login</button>
+    <p class="mt-2">No account? <a href="#" onclick="showRegister()">Register</a></p>
+</div>
+
+<!-- REGISTER -->
+<div id="registerPage" class="hidden">
+    <h3>Register</h3>
+    <input id="regUser" class="form-control mb-2" placeholder="Username">
+    <input id="regEmail" class="form-control mb-2" placeholder="Email">
+    <input id="regPass" type="password" class="form-control mb-2" placeholder="Password">
+    <button class="btn btn-success" onclick="register()">Register</button>
 </div>
 
 <!-- DASHBOARD -->
 <div id="dashboardPage" class="hidden">
 
-    <div class="d-flex justify-content-between mb-3">
+    <div class="d-flex justify-content-between">
         <h3>Dashboard</h3>
         <button class="btn btn-danger" onclick="logout()">Logout</button>
     </div>
 
-    <div class="row text-center">
-        <div class="col-md-4">
+    <div class="row text-center mt-3">
+        <div class="col-md-6">
             <div class="card p-3">
                 <h5>Total Trips</h5>
                 <h2 id="totalTrips">0</h2>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-6">
             <div class="card p-3">
-                <h5>Total Spent</h5>
+                <h5>Total Expenses</h5>
                 <h2 id="totalSpent">₹0</h2>
             </div>
         </div>
@@ -55,7 +65,6 @@ body { background:#f4f6f9; }
 
     <hr>
 
-    <!-- ADD TRIP -->
     <h4>Add Trip</h4>
     <input id="tripName" class="form-control mb-2" placeholder="Trip Name">
     <input id="destination" class="form-control mb-2" placeholder="Destination">
@@ -64,8 +73,6 @@ body { background:#f4f6f9; }
 
     <hr>
 
-    <!-- TRIP LIST -->
-    <h4>Your Trips</h4>
     <div id="tripList"></div>
 
 </div>
@@ -74,16 +81,14 @@ body { background:#f4f6f9; }
 <div id="tripPage" class="hidden">
 
     <button class="btn btn-secondary mb-3" onclick="back()">⬅ Back</button>
-
     <h3 id="tripTitle"></h3>
 
-    <!-- ADD EXPENSE -->
     <input id="desc" class="form-control mb-2" placeholder="Description">
     <input id="amount" type="number" class="form-control mb-2" placeholder="Amount">
 
     <select id="category" class="form-control mb-2">
-        <option>Food</option>
-        <option>Travel</option>
+        <option>Food & Dining</option>
+        <option>Transportation</option>
         <option>Shopping</option>
     </select>
 
@@ -91,7 +96,6 @@ body { background:#f4f6f9; }
 
     <hr>
 
-    <h4>Expenses</h4>
     <ul id="expenseList" class="list-group"></ul>
 
 </div>
@@ -99,13 +103,41 @@ body { background:#f4f6f9; }
 </div>
 
 <script>
+
+// ===== DATABASE (models.py converted) =====
+let users = JSON.parse(localStorage.getItem("users")) || [];
 let trips = JSON.parse(localStorage.getItem("trips")) || [];
+let currentUser = null;
 let currentTrip = null;
 
-// LOGIN
+// ===== AUTH (app.py routes converted) =====
+function register() {
+    let user = document.getElementById("regUser").value;
+    let email = document.getElementById("regEmail").value;
+    let pass = document.getElementById("regPass").value;
+
+    if(!user || !email || !pass) return alert("Fill all fields");
+
+    users.push({user, email, pass});
+    localStorage.setItem("users", JSON.stringify(users));
+
+    alert("Registered Successfully");
+    showLogin();
+}
+
 function login() {
+    let user = document.getElementById("loginUser").value;
+    let pass = document.getElementById("loginPass").value;
+
+    let found = users.find(u => u.user === user && u.pass === pass);
+
+    if(!found) return alert("Invalid credentials");
+
+    currentUser = user;
+
     document.getElementById("loginPage").classList.add("hidden");
     document.getElementById("dashboardPage").classList.remove("hidden");
+
     renderDashboard();
 }
 
@@ -113,57 +145,42 @@ function logout() {
     location.reload();
 }
 
-// DASHBOARD
-function renderDashboard() {
-    document.getElementById("totalTrips").innerText = trips.length;
-
-    let total = 0;
-    trips.forEach(t => {
-        t.expenses.forEach(e => total += Number(e.amount));
-    });
-
-    document.getElementById("totalSpent").innerText = "₹" + total;
-
-    renderTrips();
-}
-
-// ADD TRIP
+// ===== TRIPS =====
 function addTrip() {
     let name = document.getElementById("tripName").value;
     let dest = document.getElementById("destination").value;
     let budget = document.getElementById("budget").value;
 
-    if(!name || !dest) return alert("Fill all fields");
+    trips.push({name, dest, budget, user: currentUser, expenses: []});
 
-    let trip = {
-        name,
-        dest,
-        budget,
-        expenses:[]
-    };
-
-    trips.push(trip);
     save();
     renderDashboard();
 }
 
-// RENDER TRIPS
-function renderTrips() {
+function renderDashboard() {
+    let userTrips = trips.filter(t => t.user === currentUser);
+
+    document.getElementById("totalTrips").innerText = userTrips.length;
+
+    let total = 0;
+    userTrips.forEach(t => t.expenses.forEach(e => total += Number(e.amount)));
+
+    document.getElementById("totalSpent").innerText = "₹" + total;
+
     let list = document.getElementById("tripList");
     list.innerHTML = "";
 
-    trips.forEach((t,i)=>{
+    userTrips.forEach((t,i)=>{
         list.innerHTML += `
-            <div class="card p-3 mb-2">
-                <h5>${t.name}</h5>
-                <p>${t.dest}</p>
-                <button class="btn btn-primary" onclick="openTrip(${i})">Open</button>
-            </div>
-        `;
+        <div class="card p-3 mb-2">
+            <h5>${t.name}</h5>
+            <p>${t.dest}</p>
+            <button class="btn btn-primary" onclick="openTrip(${i})">Open</button>
+        </div>`;
     });
 }
 
-// OPEN TRIP
+// ===== TRIP DETAILS =====
 function openTrip(index) {
     currentTrip = index;
 
@@ -175,20 +192,17 @@ function openTrip(index) {
     renderExpenses();
 }
 
-// ADD EXPENSE
 function addExpense() {
     let desc = document.getElementById("desc").value;
     let amount = document.getElementById("amount").value;
     let cat = document.getElementById("category").value;
 
-    if(!desc || !amount) return alert("Fill fields");
-
     trips[currentTrip].expenses.push({desc, amount, cat});
+
     save();
     renderExpenses();
 }
 
-// RENDER EXPENSES
 function renderExpenses() {
     let list = document.getElementById("expenseList");
     list.innerHTML = "";
@@ -196,30 +210,40 @@ function renderExpenses() {
     trips[currentTrip].expenses.forEach((e,i)=>{
         list.innerHTML += `
         <li class="list-group-item">
-            ${e.desc} - ₹${e.amount} (${e.cat})
+            ${e.desc} - ₹${e.amount}
             <button class="btn btn-danger btn-sm float-end" onclick="deleteExpense(${i})">Delete</button>
         </li>`;
     });
 }
 
-// DELETE EXPENSE
 function deleteExpense(i) {
     trips[currentTrip].expenses.splice(i,1);
     save();
     renderExpenses();
 }
 
-// BACK
+// ===== NAVIGATION =====
 function back() {
     document.getElementById("tripPage").classList.add("hidden");
     document.getElementById("dashboardPage").classList.remove("hidden");
     renderDashboard();
 }
 
-// SAVE
+function showRegister() {
+    document.getElementById("loginPage").classList.add("hidden");
+    document.getElementById("registerPage").classList.remove("hidden");
+}
+
+function showLogin() {
+    document.getElementById("registerPage").classList.add("hidden");
+    document.getElementById("loginPage").classList.remove("hidden");
+}
+
+// ===== SAVE =====
 function save() {
     localStorage.setItem("trips", JSON.stringify(trips));
 }
+
 </script>
 
 </body>
