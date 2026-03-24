@@ -6,12 +6,14 @@
     <title>Python Files Index</title>
 </head>
 <body>
-    <h1>Python Files</h1>
+    <h1>Trip Budget App (Flask)</h1>
+    <p>Run the Flask app first (e.g., <code>python app.py</code> or <code>flask run</code>), then use these routes on localhost:</p>
     <ul>
-        <li><a href="app.py">app.py</a></li>
-        <li><a href="config.py">config.py</a></li>
-        <li><a href="forms.py">forms.py</a></li>
-        <li><a href="models.py">models.py</a></li>
+        <li><a href="/">Home (redirects to login/dashboard)</a></li>
+        <li><a href="/login">Login</a></li>
+        <li><a href="/register">Register</a></li>
+        <li><a href="/dashboard">Dashboard</a> (requires authentication)</li>
     </ul>
+    <p><strong>Note:</strong> This static index page is for navigation. GitHub Pages cannot execute Flask routes; run locally at <code>http://127.0.0.1:5000</code> for full behavior.</p>
 </body>
 </html>
