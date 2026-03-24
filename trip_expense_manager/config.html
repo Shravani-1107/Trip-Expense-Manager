@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>App Configuration</title>
+</head>
+<body>
+
+<h2>Application Configuration</h2>
+
+<script>
+// ============================================
+// config.py → HTML (JavaScript version)
+// ============================================
+
+const Config = {
+
+    // Secret key (used in backend for sessions)
+    SECRET_KEY: "your-secret-key-change-in-production",
+
+    // Database (SQLite replaced with browser storage)
+    SQLALCHEMY_DATABASE_URI: "localStorage://trip_expenses",
+
+    // Track modifications (not required in frontend)
+    SQLALCHEMY_TRACK_MODIFICATIONS: false
+
+};
+
+// Display config (for testing/demo)
+document.write("<h3>Loaded Configuration:</h3>");
+document.write("<p><b>SECRET_KEY:</b> " + Config.SECRET_KEY + "</p>");
+document.write("<p><b>DATABASE:</b> " + Config.SQLALCHEMY_DATABASE_URI + "</p>");
+document.write("<p><b>TRACK_MODIFICATIONS:</b> " + Config.SQLALCHEMY_TRACK_MODIFICATIONS + "</p>");
+
+</script>
+
+</body>
+</html>
