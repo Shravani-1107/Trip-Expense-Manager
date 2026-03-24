@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Trip Expense Manager</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+body { background:#f4f6f9; }
+.hidden { display:none; }
+</style>
+</head>
+
+<body>
+
+<nav class="navbar navbar-dark bg-dark px-3">
+    <span class="navbar-brand">🌍 Trip Expense Manager</span>
+</nav>
+
+<div class="container mt-4">
+
+<!-- LOGIN -->
+<div id="loginPage">
+    <h3>Login</h3>
+    <input id="loginUser" class="form-control mb-2" placeholder="Username">
+    <input id="loginPass" type="password" class="form-control mb-2" placeholder="Password">
+    <button class="btn btn-primary" onclick="login()">Login</button>
+    <p><a href="#" onclick="showRegister()">Register</a></p>
+</div>
+
+<!-- REGISTER -->
+<div id="registerPage" class="hidden">
+    <h3>Register</h3>
+    <input id="regUser" class="form-control mb-2" placeholder="Username">
+    <input id="regEmail" class="form-control mb-2" placeholder="Email">
+    <input id="regPass" type="password" class="form-control mb-2" placeholder="Password">
+    <button class="btn btn-success" onclick="register()">Register</button>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboardPage" class="hidden">
+
+<div class="d-flex justify-content-between">
+    <h3>Dashboard</h3>
+    <button class="btn btn-danger" onclick="logout()">Logout</button>
+</div>
+
+<div class="row mt-3 text-center">
+    <div class="col-md-4">
+        <div class="card p-3">
+            <h5>Total Trips</h5>
+            <h2 id="totalTrips">0</h2>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card p-3">
+            <h5>Total Spent</h5>
+            <h2 id="totalSpent">₹0</h2>
+        </div>
+    </div>
+</div>
+
+<hr>
+
+<h5>Add Trip</h5>
+<input id="tripName" class="form-control mb-2" placeholder="Trip Name">
+<input id="destination" class="form-control mb-2" placeholder="Destination">
+<button class="btn btn-success" onclick="addTrip()">Add Trip</button>
+
+<hr>
+
+<div id="tripList"></div>
+
+</div>
+
+<!-- TRIP DETAILS -->
+<div id="tripPage" class="hidden">
+
+<button class="btn btn-secondary mb-3" onclick="back()">⬅ Back</button>
+<h3 id="tripTitle"></h3>
+
+<div class="row">
+<div class="col-md-6">
+
+<input id="desc" class="form-control mb-2" placeholder="Description">
+<input id="amount" type="number" class="form-control mb-2" placeholder="Amount">
+
+<button class="btn btn-primary" onclick="addExpense()">Add Expense</button>
+
+</div>
+
+<div class="col-md-6">
+<h5>Report</h5>
+<p>Total: ₹<span id="tripTotal">0</span></p>
+</div>
+</div>
+
+<hr>
+
+<ul id="expenseList" class="list-group"></ul>
+
+</div>
+
+</div>
+
+<script>
+
+// ===== DATA =====
+let users = JSON.parse(localStorage.getItem("users")) || [];
+let trips = JSON.parse(localStorage.getItem("trips")) || [];
+
+let currentUser = null;
+let currentTrip = null;
+
+// ===== AUTH =====
+function register() {
+    users.push({
+        username: regUser.value,
+        email: regEmail.value,
+        password: regPass.value
+    });
+    localStorage.setItem("users", JSON.stringify(users));
+    alert("Registered!");
+    showLogin();
+}
+
+function login() {
+    let user = users.find(u => u.username === loginUser.value && u.password === loginPass.value);
+
+    if(!user) return alert("Invalid login");
+
+    currentUser = user.username;
+
+    loginPage.classList.add("hidden");
+    dashboardPage.classList.remove("hidden");
+
+    renderDashboard();
+}
+
+function logout() {
+    location.reload();
+}
+
+// ===== DASHBOARD =====
+function renderDashboard() {
+    let userTrips = trips.filter(t => t.user === currentUser);
+
+    totalTrips.innerText = userTrips.length;
+
+    let total = 0;
+    userTrips.forEach(t => t.expenses.forEach(e => total += +e.amount));
+
+    totalSpent.innerText = "₹" + total;
+
+    tripList.innerHTML = "";
+
+    userTrips.forEach((t,i)=>{
+        tripList.innerHTML += `
+        <div class="card p-3 mb-2">
+            <h5>${t.name}</h5>
+            <p>${t.dest}</p>
+            <button class="btn btn-primary" onclick="openTrip(${i})">View</button>
+        </div>`;
+    });
+}
+
+// ===== TRIP =====
+function addTrip() {
+    trips.push({
+        name: tripName.value,
+        dest: destination.value,
+        user: currentUser,
+        expenses:[]
+    });
+
+    save();
+    renderDashboard();
+}
+
+function openTrip(i) {
+    currentTrip = i;
+
+    dashboardPage.classList.add("hidden");
+    tripPage.classList.remove("hidden");
+
+    tripTitle.innerText = trips[i].name;
+
+    renderExpenses();
+}
+
+// ===== EXPENSE =====
+function addExpense() {
+    trips[currentTrip].expenses.push({
+        desc: desc.value,
+        amount: amount.value
+    });
+
+    save();
+    renderExpenses();
+}
+
+function renderExpenses() {
+    let total = 0;
+    expenseList.innerHTML = "";
+
+    trips[currentTrip].expenses.forEach((e,i)=>{
+        total += +e.amount;
+
+        expenseList.innerHTML += `
+        <li class="list-group-item">
+            ${e.desc} - ₹${e.amount}
+            <button class="btn btn-danger btn-sm float-end" onclick="deleteExpense(${i})">X</button>
+        </li>`;
+    });
+
+    tripTotal.innerText = total;
+}
+
+function deleteExpense(i) {
+    trips[currentTrip].expenses.splice(i,1);
+    save();
+    renderExpenses();
+}
+
+// ===== NAV =====
+function back() {
+    tripPage.classList.add("hidden");
+    dashboardPage.classList.remove("hidden");
+    renderDashboard();
+}
+
+function showRegister() {
+    loginPage.classList.add("hidden");
+    registerPage.classList.remove("hidden");
+}
+
+function showLogin() {
+    registerPage.classList.add("hidden");
+    loginPage.classList.remove("hidden");
+}
+
+// ===== SAVE =====
+function save() {
+    localStorage.setItem("trips", JSON.stringify(trips));
+}
+
+</script>
+
+</body>
+</html>
