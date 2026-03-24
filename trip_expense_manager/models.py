@@ -1,228 +1,141 @@
-"""
-models.py - Database Models
-===========================
-This file defines the structure of our database tables using SQLAlchemy ORM.
-ORM (Object-Relational Mapping) allows us to work with databases using Python objects.
-"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Models Conversion</title>
+</head>
+<body>
 
-from flask_sqlalchemy import SQLAlchemy
-from flask_login import UserMixin
-from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+<h2>Models (Converted from Flask)</h2>
 
-# Initialize SQLAlchemy - this will be connected to Flask app later
-db = SQLAlchemy()
+<script>
 
+// ============================================
+// DATABASE (SQLAlchemy → localStorage)
+// ============================================
 
-class User(UserMixin, db.Model):
-    """
-    User Model - Stores user account information
-    
-    UserMixin provides default implementations for:
-    - is_authenticated: Returns True if user is logged in
-    - is_active: Returns True if account is active
-    - is_anonymous: Returns False for regular users
-    - get_id(): Returns unique identifier for the user
-    
-    Attributes:
-        id: Primary key, auto-incremented
-        username: Unique username for login
-        email: User's email address
-        password_hash: Encrypted password (never store plain passwords!)
-        created_at: When the account was created
-        trips: Relationship to Trip model (one user can have many trips)
-    """
-    
-    __tablename__ = 'users'  # Table name in database
-    
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Relationship: One user can have many trips
-    # backref creates a 'user' attribute on Trip objects
-    trips = db.relationship('Trip', backref='user', lazy=True, cascade='all, delete-orphan')
-    
-    def set_password(self, password):
-        """
-        Hash and store the password securely.
-        Never store plain text passwords!
-        
-        Args:
-            password: Plain text password from user
-        """
-        self.password_hash = generate_password_hash(password)
-    
-    def check_password(self, password):
-        """
-        Verify a password against the stored hash.
-        
-        Args:
-            password: Plain text password to verify
-            
-        Returns:
-            bool: True if password matches, False otherwise
-        """
-        return check_password_hash(self.password_hash, password)
-    
-    def __repr__(self):
-        """String representation for debugging"""
-        return f'<User {self.username}>'
+let users = JSON.parse(localStorage.getItem("users")) || [];
+let trips = JSON.parse(localStorage.getItem("trips")) || [];
 
+// ============================================
+// USER MODEL
+// ============================================
 
-class Trip(db.Model):
-    """
-    Trip Model - Stores trip information
-    
-    Each trip belongs to one user and can have multiple expenses.
-    
-    Attributes:
-        id: Primary key
-        name: Trip name (e.g., "Goa Vacation 2024")
-        destination: Trip destination/location
-        start_date: Trip start date
-        end_date: Trip end date
-        base_currency: Currency used for the trip (INR, USD, EUR, etc.)
-        budget: Planned budget for the trip
-        description: Optional trip description
-        user_id: Foreign key linking to user
-        expenses: Relationship to Expense model
-    """
-    
-    __tablename__ = 'trips'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    destination = db.Column(db.String(100), nullable=False)
-    start_date = db.Column(db.Date, nullable=False)
-    end_date = db.Column(db.Date, nullable=False)
-    base_currency = db.Column(db.String(3), default='INR')  # ISO currency code
-    budget = db.Column(db.Float, default=0.0)
-    description = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Foreign key - links this trip to a user
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    
-    # Relationship: One trip can have many expenses
-    expenses = db.relationship('Expense', backref='trip', lazy=True, cascade='all, delete-orphan')
-    
-    @property
-    def total_expenses(self):
-        """
-        Calculate total expenses for this trip.
-        Property decorator allows us to access this like an attribute.
-        
-        Returns:
-            float: Sum of all expense amounts
-        """
-        return sum(expense.amount_in_base_currency for expense in self.expenses)
-    
-    @property
-    def remaining_budget(self):
-        """
-        Calculate remaining budget.
-        
-        Returns:
-            float: Budget minus total expenses
-        """
-        return self.budget - self.total_expenses
-    
-    @property
-    def duration_days(self):
-        """
-        Calculate trip duration in days.
-        
-        Returns:
-            int: Number of days
-        """
-        return (self.end_date - self.start_date).days + 1
-    
-    def __repr__(self):
-        return f'<Trip {self.name}>'
+class User {
+    constructor(username, email, password) {
+        this.id = Date.now();
+        this.username = username;
+        this.email = email;
+        this.password = password; // no hashing in frontend
+        this.created_at = new Date();
+    }
 
-
-class Expense(db.Model):
-    """
-    Expense Model - Stores individual expense records
-    
-    Each expense belongs to one trip.
-    
-    Attributes:
-        id: Primary key
-        description: What the expense was for
-        category: Type of expense (Food, Transport, etc.)
-        amount: Expense amount
-        currency: Currency of the expense
-        exchange_rate: Exchange rate to base currency
-        date: Date of expense
-        day_of_trip: Which day of the trip (Day 1, Day 2, etc.)
-        location: Where the expense occurred
-        payment_method: How it was paid (Cash, Card, UPI)
-        notes: Additional notes
-        trip_id: Foreign key linking to trip
-    """
-    
-    __tablename__ = 'expenses'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    description = db.Column(db.String(200), nullable=False)
-    category = db.Column(db.String(50), nullable=False)
-    amount = db.Column(db.Float, nullable=False)
-    currency = db.Column(db.String(3), default='INR')
-    exchange_rate = db.Column(db.Float, default=1.0)  # Rate to convert to base currency
-    date = db.Column(db.Date, nullable=False)
-    day_of_trip = db.Column(db.Integer)  # Day 1, Day 2, etc.
-    location = db.Column(db.String(100))
-    payment_method = db.Column(db.String(50), default='Cash')
-    notes = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Foreign key - links this expense to a trip
-    trip_id = db.Column(db.Integer, db.ForeignKey('trips.id'), nullable=False)
-    
-    @property
-    def amount_in_base_currency(self):
-        """
-        Convert expense amount to trip's base currency.
-        
-        Returns:
-            float: Amount converted using exchange rate
-        """
-        return self.amount * self.exchange_rate
-    
-    def __repr__(self):
-        return f'<Expense {self.description}: {self.amount} {self.currency}>'
-
-
-# Expense categories - used for dropdown menus
-EXPENSE_CATEGORIES = [
-    'Food & Dining',
-    'Transportation',
-    'Accommodation',
-    'Shopping',
-    'Entertainment',
-    'Sightseeing',
-    'Communication',
-    'Health & Medical',
-    'Miscellaneous'
-]
-
-# Supported currencies with exchange rates (relative to INR)
-# In a production app, you'd fetch these from an API
-CURRENCIES = {
-    'INR': {'name': 'Indian Rupee', 'symbol': '₹', 'rate_to_inr': 1.0},
-    'USD': {'name': 'US Dollar', 'symbol': '$', 'rate_to_inr': 83.0},
-    'EUR': {'name': 'Euro', 'symbol': '€', 'rate_to_inr': 90.0},
-    'GBP': {'name': 'British Pound', 'symbol': '£', 'rate_to_inr': 105.0},
-    'JPY': {'name': 'Japanese Yen', 'symbol': '¥', 'rate_to_inr': 0.55},
-    'AUD': {'name': 'Australian Dollar', 'symbol': 'A$', 'rate_to_inr': 54.0},
-    'SGD': {'name': 'Singapore Dollar', 'symbol': 'S$', 'rate_to_inr': 61.0},
-    'THB': {'name': 'Thai Baht', 'symbol': '฿', 'rate_to_inr': 2.3},
-    'AED': {'name': 'UAE Dirham', 'symbol': 'د.إ', 'rate_to_inr': 22.6}
+    checkPassword(password) {
+        return this.password === password;
+    }
 }
 
-# Payment methods
-PAYMENT_METHODS = ['Cash', 'Credit Card', 'Debit Card', 'UPI', 'Net Banking', 'Traveler Cheque']
+// ============================================
+// TRIP MODEL
+// ============================================
+
+class Trip {
+    constructor(name, destination, start_date, end_date, user_id) {
+        this.id = Date.now();
+        this.name = name;
+        this.destination = destination;
+        this.start_date = new Date(start_date);
+        this.end_date = new Date(end_date);
+        this.base_currency = "INR";
+        this.budget = 0;
+        this.user_id = user_id;
+        this.expenses = [];
+    }
+
+    get total_expenses() {
+        return this.expenses.reduce((sum, e) => sum + e.amount_in_base_currency, 0);
+    }
+
+    get remaining_budget() {
+        return this.budget - this.total_expenses;
+    }
+
+    get duration_days() {
+        return Math.ceil((this.end_date - this.start_date) / (1000 * 60 * 60 * 24)) + 1;
+    }
+}
+
+// ============================================
+// EXPENSE MODEL
+// ============================================
+
+class Expense {
+    constructor(desc, category, amount, currency, date, trip_id) {
+        this.id = Date.now();
+        this.description = desc;
+        this.category = category;
+        this.amount = amount;
+        this.currency = currency;
+        this.exchange_rate = 1;
+        this.date = new Date(date);
+        this.trip_id = trip_id;
+    }
+
+    get amount_in_base_currency() {
+        return this.amount * this.exchange_rate;
+    }
+}
+
+// ============================================
+// STATIC DATA (same as Python)
+// ============================================
+
+const EXPENSE_CATEGORIES = [
+    "Food & Dining",
+    "Transportation",
+    "Accommodation",
+    "Shopping",
+    "Entertainment"
+];
+
+const CURRENCIES = {
+    INR: { symbol: "₹", rate: 1 },
+    USD: { symbol: "$", rate: 83 },
+    EUR: { symbol: "€", rate: 90 }
+};
+
+const PAYMENT_METHODS = ["Cash", "Card", "UPI"];
+
+// ============================================
+// SAVE FUNCTION
+// ============================================
+
+function saveData() {
+    localStorage.setItem("users", JSON.stringify(users));
+    localStorage.setItem("trips", JSON.stringify(trips));
+}
+
+// ============================================
+// DEMO (test)
+// ============================================
+
+// Create sample user
+let u = new User("shubham", "test@mail.com", "123456");
+users.push(u);
+
+// Create trip
+let t = new Trip("Goa Trip", "Goa", "2024-01-01", "2024-01-05", u.id);
+trips.push(t);
+
+// Add expense
+let e = new Expense("Food", "Food & Dining", 500, "INR", "2024-01-02", t.id);
+t.expenses.push(e);
+
+saveData();
+
+document.write("<h3>Sample Data Created</h3>");
+document.write("<p>Total Expense: ₹" + t.total_expenses + "</p>");
+
+</script>
+
+</body>
+</html>
